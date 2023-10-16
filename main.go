@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 
 	"github.com/vmware/govmomi"
@@ -14,49 +15,37 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// ESXi 或 vCenter 的 URL、用户名和密码
-	esxiURL := "https://192.168.99.4/sdk"
-	username := "root"
-	password := "qwer@1234"
-
-	// 解析 URL 并创建连接
-	u, err := url.Parse(esxiURL)
+	// 创建 vSphere API 的 URL。通常包括用户名、密码和 vSphere 主机地址。
+	urlString := "https://root:qwer@1234@192.168.99.4/sdk"
+	u, err := url.Parse(urlString)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
+		log.Fatalf("解析 URL 出错: %v", err)
 	}
 
-	u.User = url.UserPassword(username, password)
-
-	// 连接到 ESXi 或 vCenter
-	c, err := govmomi.NewClient(ctx, u, true)
+	// 使用 URL 创建一个新的 govmomi 客户端实例。
+	client, err := govmomi.NewClient(ctx, u, true)
 	if err != nil {
-		fmt.Printf("Error connecting to ESXi: %v\n", err)
-		return
+		log.Fatalf("连接到 vSphere 出错: %v", err)
 	}
 
-	// 创建一个视图管理器
-	m := view.NewManager(c.Client)
+	// 创建一个新的 view manager
+	m := view.NewManager(client.Client)
 
-	// 创建一个容器视图，查看所有虚拟机对象
-	v, err := m.CreateContainerView(ctx, c.ServiceContent.RootFolder, []string{"VirtualMachine"}, true)
+	// 创建一个新的容器视图，查看 VirtualMachine 对象
+	v, err := m.CreateContainerView(ctx, client.ServiceContent.RootFolder, []string{"VirtualMachine"}, true)
 	if err != nil {
-		fmt.Printf("Error creating view: %v\n", err)
-		return
+		log.Fatalf("创建容器视图出错: %v", err)
 	}
 
-	defer v.Destroy(ctx)
-
-	// 使用属性收集器检索虚拟机的摘要属性
+	// 检索我们关心的对象的摘要
 	var vms []mo.VirtualMachine
-	err = v.Retrieve(ctx, []string{"VirtualMachine"}, []string{"summary"}, &vms)
+	err = v.Retrieve(ctx, []string{"VirtualMachine"}, nil, &vms)
 	if err != nil {
-		fmt.Printf("Error retrieving VM information: %v\n", err)
-		return
+		log.Fatalf("检索虚拟机出错: %v", err)
 	}
 
-	// 列出找到的虚拟机
+	// 处理结果，例如打印虚拟机的名称
 	for _, vm := range vms {
-		fmt.Printf("Found VM: %s, state: %s\n", vm.Summary.Config.Name, vm.Summary.Runtime.PowerState)
+		fmt.Printf("虚拟机: %s\n", vm.Name)
 	}
 }
